@@ -19,6 +19,7 @@ from django.urls import path, include
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from django.http import HttpResponse
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -38,8 +39,12 @@ def api_root(request):
         }
     })
 
+def healthz(request):
+    return HttpResponse("OK", status=200)
+
 urlpatterns = [
     path('', api_root, name='api-root'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    path('healthz/', healthz, name='healthz'),
 ]

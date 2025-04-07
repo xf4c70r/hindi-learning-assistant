@@ -144,7 +144,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = False  # More secure
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React frontend
+    "http://localhost:3000",  # React frontend in development
+    "https://your-frontend-name.onrender.com",  # React frontend in production (update this)
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
