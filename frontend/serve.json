@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    { "source": "/healthz", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/healthz",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain" }
+      ]
+    }
+  ]
+} 

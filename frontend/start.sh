@@ -8,5 +8,5 @@ npm install
 # Install serve globally
 npm install -g serve
 
-# Serve the built application using serve
-serve -s build -l $PORT 
+# Serve the built application using serve with config
+serve -s build -l $PORT --config serve.json 
