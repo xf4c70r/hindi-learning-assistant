@@ -8,5 +8,8 @@ npm install
 # Install serve globally
 npm install -g serve
 
+# Ensure PORT is set
+export PORT="${PORT:-3000}"
+
 # Serve the built application using serve with config
-serve -s build -l $PORT --config serve.json 
+serve -s build --config build/serve.json --listen $PORT 
