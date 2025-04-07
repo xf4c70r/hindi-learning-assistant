@@ -14,7 +14,6 @@ import { useNavigate } from 'react-router-dom';
 import YouTubeIcon from '@mui/icons-material/YouTube';
 import QuizIcon from '@mui/icons-material/Quiz';
 import TranslateIcon from '@mui/icons-material/Translate';
-import SchoolIcon from '@mui/icons-material/School';
 
 const HeroSection = styled(Box)(({ theme }) => ({
   background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
@@ -59,21 +58,6 @@ const IconWrapper = styled(Box)(({ theme }) => ({
   justifyContent: 'center',
   width: '64px',
   height: '64px',
-}));
-
-const StatsSection = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.background.paper,
-  padding: theme.spacing(8, 0),
-  textAlign: 'center',
-}));
-
-const StatCard = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  backgroundColor: 'rgba(25, 118, 210, 0.04)',
 }));
 
 const Home = () => {
