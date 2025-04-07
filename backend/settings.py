@@ -149,11 +149,11 @@ os.makedirs(os.path.join(BASE_DIR, 'static'), exist_ok=True)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = False  # More secure
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # React frontend in development
-    "https://your-frontend-name.onrender.com",  # React frontend in production (update this)
+    "https://hindisetufrontend.onrender.com",  # React frontend in production
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
