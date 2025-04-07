@@ -12,4 +12,4 @@ npm install -g serve
 export PORT="${PORT:-3000}"
 
 # Serve the built application using serve with config
-serve -s build --config build/serve.json --listen $PORT 
+serve -s build --config serve.json --listen $PORT 

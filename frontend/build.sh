@@ -8,8 +8,8 @@ npm install
 # Build the application
 npm run build
 
-# Create serve.json in the build directory
-cat > build/serve.json << EOL
+# Create serve.json in the frontend directory
+cat > serve.json << EOL
 {
   "rewrites": [
     { "source": "/healthz", "destination": "/index.html" },
