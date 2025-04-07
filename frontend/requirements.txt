@@ -1,0 +1,5 @@
+# Node.js version
+nodejs==20.11.1
+npm==10.2.4
+
+# Build dependencies will be installed from package.json 
