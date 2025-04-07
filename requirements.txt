@@ -13,5 +13,5 @@ certifi==2024.2.2
 gunicorn==21.2.0
 
 # Frontend Requirements
-nodejs==20.11.1  # Node.js version
-npm==10.2.4      # npm version 
+# nodejs==20.11.1  # Node.js version
+# npm==10.2.4      # npm version 
