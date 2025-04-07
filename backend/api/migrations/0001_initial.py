@@ -18,6 +18,7 @@ class Migration(migrations.Migration):
             name='Transcript',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('user_id', models.CharField(max_length=100)),
                 ('video_id', models.CharField(max_length=100)),
                 ('title', models.CharField(max_length=255)),
                 ('content', models.TextField()),
@@ -25,11 +26,51 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('is_favorite', models.BooleanField(default=False)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='transcripts', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['video_id'], name='api_transcr_video_i_580a02_idx'), models.Index(fields=['user', 'created_at'], name='api_transcr_user_id_a74fee_idx'), models.Index(fields=['user', 'is_favorite'], name='api_transcr_user_id_a9c67d_idx')],
             },
+        ),
+        migrations.AddIndex(
+            model_name='transcript',
+            index=models.Index(fields=['video_id'], name='api_transcr_video_i_3a6b19_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='transcript',
+            index=models.Index(fields=['user_id', 'created_at'], name='api_transcr_user_id_2a6b19_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='transcript',
+            index=models.Index(fields=['user_id', 'is_favorite'], name='api_transcr_user_id_1a6b19_idx'),
+        ),
+        migrations.AlterUniqueTogether(
+            name='transcript',
+            unique_together={('user_id', 'video_id')},
+        ),
+        migrations.CreateModel(
+            name='Question',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('question_type', models.CharField(choices=[('novice', 'Novice'), ('mcq', 'Multiple Choice'), ('fill_blanks', 'Fill in the Blanks')], max_length=20)),
+                ('question_text', models.TextField()),
+                ('answer', models.TextField()),
+                ('options', models.JSONField(blank=True, null=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('is_favorite', models.BooleanField(default=False)),
+                ('attempts', models.IntegerField(default=0)),
+                ('correct_attempts', models.IntegerField(default=0)),
+                ('transcript', models.ForeignKey(on_delete=models.deletion.CASCADE, related_name='questions', to='api.transcript')),
+            ],
+            options={
+                'ordering': ['-created_at'],
+            },
+        ),
+        migrations.AddIndex(
+            model_name='question',
+            index=models.Index(fields=['transcript', 'question_type'], name='api_questio_transcr_1a6b19_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='question',
+            index=models.Index(fields=['transcript', 'is_favorite'], name='api_questio_transcr_2a6b19_idx'),
         ),
     ]

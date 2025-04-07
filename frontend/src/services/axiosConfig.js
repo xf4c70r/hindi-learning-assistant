@@ -1,10 +1,9 @@
 import axios from 'axios';
-
-const API_URL = process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/api` : 'http://localhost:8000/api';
+import config from './config';
 
 // Create axios instance with default config
 const api = axios.create({
-    baseURL: API_URL,
+    baseURL: config.API_URL,
     headers: {
         'Content-Type': 'application/json'
     }
@@ -35,7 +34,7 @@ api.interceptors.response.use(
             
             try {
                 const refreshToken = localStorage.getItem('refreshToken');
-                const response = await axios.post(`${API_URL}/auth/refresh/`, {
+                const response = await axios.post(`${config.API_URL}/auth/refresh/`, {
                     refresh: refreshToken
                 });
                 

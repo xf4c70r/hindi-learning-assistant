@@ -1,10 +1,9 @@
 from django.db import models
-from django.contrib.auth.models import User
 
 # Create your models here.
 
 class Transcript(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transcripts')
+    user_id = models.CharField(max_length=100)  # MongoDB user ID
     video_id = models.CharField(max_length=100)
     title = models.CharField(max_length=255)
     content = models.TextField()
@@ -17,10 +16,10 @@ class Transcript(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['video_id']),
-            models.Index(fields=['user', 'created_at']),
-            models.Index(fields=['user', 'is_favorite']),
+            models.Index(fields=['user_id', 'created_at']),
+            models.Index(fields=['user_id', 'is_favorite']),
         ]
-        unique_together = ['user', 'video_id']  # Prevent duplicate video_id per user
+        unique_together = ['user_id', 'video_id']  # Prevent duplicate video_id per user
 
     def __str__(self):
         return f"{self.title} ({self.video_id})"

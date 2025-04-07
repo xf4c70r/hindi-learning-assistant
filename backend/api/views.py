@@ -151,17 +151,13 @@ def logout(request):
 
 class TranscriptViewSet(viewsets.ModelViewSet):
     serializer_class = TranscriptSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Transcript.objects.filter(user=self.request.user)
-        favorite = self.request.query_params.get('favorite', None)
-        if favorite and favorite.lower() == 'true':
-            queryset = queryset.filter(is_favorite=True)
-        return queryset
+        return Transcript.objects.filter(user_id=str(self.request.user_id))
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        serializer.save(user_id=str(self.request.user_id))
 
     @action(detail=True, methods=['get'])
     def generate_questions(self, request, pk=None):
@@ -221,7 +217,7 @@ class TranscriptViewSet(viewsets.ModelViewSet):
 
             # Check if transcript already exists for this user and video
             existing_transcript = Transcript.objects.filter(
-                user=request.user,
+                user_id=str(request.user_id),
                 video_id=video_id
             ).first()
 
@@ -240,7 +236,7 @@ class TranscriptViewSet(viewsets.ModelViewSet):
 
             # Create transcript object in Django
             transcript = Transcript.objects.create(
-                user=request.user,
+                user_id=str(request.user_id),
                 video_id=video_id,
                 title=request.data.get('title', 'Untitled'),
                 content=formatted_transcript,
@@ -249,7 +245,7 @@ class TranscriptViewSet(viewsets.ModelViewSet):
             
             # Save transcript to MongoDB
             mongo_service.save_transcript(
-                user_id=str(request.user.id),
+                user_id=str(request.user_id),
                 video_id=video_id,
                 content=formatted_transcript,
                 language=language
@@ -324,7 +320,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return Question.objects.get(
                 id=question_id,
                 transcript_id=transcript_id,
-                transcript__user=self.request.user
+                transcript__user_id=str(self.request.user_id)
             )
         except Question.DoesNotExist:
             raise Http404("Question not found")
@@ -339,7 +335,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             # Validate transcript exists and belongs to user
             transcript = Transcript.objects.get(
                 id=transcript_pk,
-                user=request.user
+                user_id=str(self.request.user_id)
             )
             
             # Get and validate question type
@@ -509,7 +505,7 @@ def get_practice_sets(request):
                             '$match': {
                                 '$expr': {
                                     '$and': [
-                                        {'$eq': ['$user_id', str(request.user.id)]},
+                                        {'$eq': ['$user_id', str(request.user_id)]},
                                         {'$eq': ['$video_id', '$$video_id']},
                                         {'$eq': ['$type', '$$type']}
                                     ]
@@ -559,13 +555,13 @@ def get_practice_questions(request, video_id, question_type):
         
         # Get user's progress for these questions
         progress = mongo_service.db.user_progress.find_one({
-            'user_id': str(request.user.id),
+            'user_id': str(request.user_id),
             'video_id': video_id,
             'type': question_type
         })
         
         # Get transcript content
-        transcript = Transcript.objects.filter(video_id=video_id, user=request.user).first()
+        transcript = Transcript.objects.filter(video_id=video_id, user_id=str(request.user_id)).first()
         transcript_content = transcript.content if transcript else None
         
         # Convert ObjectId to string for JSON serialization
@@ -605,7 +601,7 @@ def submit_answer(request, question_id):
         # Update or create user progress
         result = mongo_service.db.user_progress.update_one(
             {
-                'user_id': str(request.user.id),
+                'user_id': str(request.user_id),
                 'video_id': video_id,
                 'type': question_type
             },
@@ -630,7 +626,7 @@ def submit_answer(request, question_id):
         
         # Calculate and update progress percentage
         progress_doc = mongo_service.db.user_progress.find_one({
-            'user_id': str(request.user.id),
+            'user_id': str(request.user_id),
             'video_id': video_id,
             'type': question_type
         })
@@ -665,7 +661,7 @@ def get_transcript_by_video(request, video_id):
     """Get transcript content for a specific video ID"""
     try:
         # Get transcript content
-        transcript = Transcript.objects.filter(video_id=video_id, user=request.user).first()
+        transcript = Transcript.objects.filter(video_id=video_id, user_id=str(request.user_id)).first()
         
         if not transcript:
             return Response(
@@ -684,3 +680,53 @@ def get_transcript_by_video(request, video_id):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_questions(request, transcript_id):
+    try:
+        transcript = Transcript.objects.get(id=transcript_id, user_id=str(request.user_id))
+        # ... rest of the function remains the same ...
+    except Transcript.DoesNotExist:
+        return Response({'error': 'Transcript not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_favorite_transcript(request, transcript_id):
+    try:
+        transcript = Transcript.objects.get(id=transcript_id, user_id=str(request.user_id))
+        transcript.is_favorite = not transcript.is_favorite
+        transcript.save()
+        return Response({'is_favorite': transcript.is_favorite})
+    except Transcript.DoesNotExist:
+        return Response({'error': 'Transcript not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_favorite_question(request, question_id):
+    try:
+        question = Question.objects.get(id=question_id, transcript__user_id=str(request.user_id))
+        question.is_favorite = not question.is_favorite
+        question.save()
+        return Response({'is_favorite': question.is_favorite})
+    except Question.DoesNotExist:
+        return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_question_stats(request, question_id):
+    try:
+        question = Question.objects.get(id=question_id, transcript__user_id=str(request.user_id))
+        is_correct = request.data.get('is_correct', False)
+        
+        question.attempts += 1
+        if is_correct:
+            question.correct_attempts += 1
+        question.save()
+        
+        return Response({
+            'attempts': question.attempts,
+            'correct_attempts': question.correct_attempts
+        })
+    except Question.DoesNotExist:
+        return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
