@@ -1,0 +1,1 @@
+from api.services.mongo_service import mongo_service; print("Connected to MongoDB"); distinct_videos = mongo_service.db.qa_pairs.distinct("video_id"); print("Video IDs in practice sets:"); for vid in distinct_videos: print(vid)
