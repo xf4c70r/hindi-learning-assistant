@@ -8,6 +8,9 @@ pip install -r requirements.txt
 # Navigate to backend directory
 cd backend
 
+# Create static directories
+mkdir -p static staticfiles
+
 # Run Django migrations
 python manage.py migrate
 
