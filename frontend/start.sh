@@ -11,5 +11,8 @@ npm install -g serve
 # Ensure PORT is set
 export PORT="${PORT:-3000}"
 
+# Copy serve.json to build directory
+cp serve.json build/
+
 # Serve the built application using serve with config
-serve -s build --config serve.json --listen $PORT 
+cd build && serve -s . --listen $PORT 
