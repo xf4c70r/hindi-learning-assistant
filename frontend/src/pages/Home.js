@@ -6,8 +6,7 @@ import {
   Button,
   Card,
   CardContent,
-  Grid,
-  Paper,
+  Grid
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
