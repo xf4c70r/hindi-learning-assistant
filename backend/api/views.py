@@ -1,16 +1,15 @@
 from django.shortcuts import render
 from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from rest_framework import status, viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.authtoken.models import Token
-from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
 from api.services.mongo_service import mongo_service
+from api.services.user_service import user_service
 from bson import ObjectId
 from datetime import datetime
 from django.http import Http404
@@ -47,16 +46,15 @@ def signup(request):
         )
 
     # Check if email already exists
-    if User.objects.filter(email=email).exists():
+    if user_service.user_exists(email):
         return Response(
             {'error': 'Email already registered'}, 
             status=status.HTTP_400_BAD_REQUEST
         )
 
     try:
-        # Create user with email as username
-        user = User.objects.create_user(
-            username=email,
+        # Create user in MongoDB
+        user = user_service.create_user(
             email=email,
             password=password,
             first_name=first_name,
@@ -64,16 +62,18 @@ def signup(request):
         )
         
         # Create JWT tokens
-        refresh = RefreshToken.for_user(user)
+        refresh = RefreshToken()
+        refresh['user_id'] = user['id']
+        refresh['email'] = user['email']
         
         return Response({
             'message': 'User created successfully',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': {
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name
+                'email': user['email'],
+                'first_name': user['first_name'],
+                'last_name': user['last_name']
             }
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
@@ -96,19 +96,31 @@ def login(request):
 
     try:
         # Get user by email
-        user = User.objects.get(email=email)
+        user = user_service.get_user_by_email(email)
+        if not user:
+            return Response(
+                {'error': 'Invalid credentials'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
-        # Authenticate using username (email) and password
-        if user.check_password(password):
-            refresh = RefreshToken.for_user(user)
+        # Verify password
+        if user_service.verify_password(user, password):
+            # Update last login
+            user_service.update_last_login(user['id'])
+            
+            # Create JWT tokens
+            refresh = RefreshToken()
+            refresh['user_id'] = user['id']
+            refresh['email'] = user['email']
+            
             return Response({
                 'message': 'Login successful',
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user': {
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name
+                    'email': user['email'],
+                    'first_name': user['first_name'],
+                    'last_name': user['last_name']
                 }
             }, status=status.HTTP_200_OK)
         else:
@@ -116,10 +128,10 @@ def login(request):
                 {'error': 'Invalid credentials'}, 
                 status=status.HTTP_401_UNAUTHORIZED
             )
-    except User.DoesNotExist:
+    except Exception as e:
         return Response(
-            {'error': 'Invalid credentials'}, 
-            status=status.HTTP_401_UNAUTHORIZED
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 @api_view(['POST'])
