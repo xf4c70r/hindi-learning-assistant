@@ -150,58 +150,11 @@ def logout(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class TranscriptViewSet(viewsets.ModelViewSet):
-    serializer_class = TranscriptSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Transcript.objects.filter(user_id=str(self.request.user_id))
-
-    def perform_create(self, serializer):
-        serializer.save(user_id=str(self.request.user_id))
-
-    @action(detail=True, methods=['get'])
-    def generate_questions(self, request, pk=None):
-        """Generate questions for a transcript"""
-        transcript = self.get_object()
-        question_type = request.query_params.get('type', 'novice')
-        
-        try:
-            # Generate questions using QA service
-            questions = qa_service.generate_questions(transcript.content, question_type)
-            
-            # Save questions to MongoDB
-            qa_docs = []
-            for qa in questions:
-                qa_doc = {
-                    'transcript_id': str(transcript.id),
-                    'video_id': transcript.video_id,
-                    'video_title': transcript.title,
-                    'question_text': qa['question'],
-                    'answer': qa['answer'],
-                    'type': qa.get('type', question_type),
-                    'options': qa.get('options', None),
-                    'created_at': datetime.utcnow(),
-                    'attempts': 0,
-                    'correct_attempts': 0
-                }
-                qa_docs.append(qa_doc)
-            
-            if qa_docs:
-                result = mongo_service.db.qa_pairs.insert_many(qa_docs)
-                # Convert ObjectIds to strings and format response
-                for doc, obj_id in zip(qa_docs, result.inserted_ids):
-                    doc['_id'] = str(obj_id)
-            
-            return Response({
-                'message': f'Successfully generated {len(qa_docs)} questions',
-                'questions': qa_docs
-            })
-            
-        except Exception as e:
-            return Response(
-                {'error': f'Failed to generate questions: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        # Get transcripts from MongoDB instead of Django DB
+        return mongo_service.get_transcripts(user_id=str(self.request.user_id))
 
     @action(detail=False, methods=['post'], url_path='create-from-video')
     def create_from_video(self, request):
@@ -215,17 +168,17 @@ class TranscriptViewSet(viewsets.ModelViewSet):
             if not video_id:
                 return Response({'error': 'Invalid YouTube URL'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if transcript already exists for this user and video
-            existing_transcript = Transcript.objects.filter(
+            # Check if transcript already exists for this user and video in MongoDB
+            existing_transcript = mongo_service.get_transcript_by_user_and_video(
                 user_id=str(request.user_id),
                 video_id=video_id
-            ).first()
+            )
 
             if existing_transcript:
                 return Response(
                     {
                         'error': 'A transcript for this video already exists',
-                        'transcript': self.get_serializer(existing_transcript).data
+                        'transcript': existing_transcript
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
@@ -233,26 +186,26 @@ class TranscriptViewSet(viewsets.ModelViewSet):
             # Get transcript from YouTube
             transcript_data, language = get_transcript(video_id)
             formatted_transcript = format_transcript(transcript_data)
-
-            # Create transcript object in Django
-            transcript = Transcript.objects.create(
-                user_id=str(request.user_id),
-                video_id=video_id,
-                title=request.data.get('title', 'Untitled'),
-                content=formatted_transcript,
-                language=language
-            )
             
-            # Save transcript to MongoDB
-            mongo_service.save_transcript(
+            # Save transcript to MongoDB only
+            result = mongo_service.save_transcript(
                 user_id=str(request.user_id),
                 video_id=video_id,
                 content=formatted_transcript,
                 language=language
             )
             
-            serializer = self.get_serializer(transcript)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Return the saved transcript data
+            saved_transcript = {
+                'id': str(result.inserted_id),
+                'video_id': video_id,
+                'title': request.data.get('title', 'Untitled'),
+                'content': formatted_transcript,
+                'language': language,
+                'user_id': str(request.user_id)
+            }
+            
+            return Response(saved_transcript, status=status.HTTP_201_CREATED)
             
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -271,11 +224,17 @@ class TranscriptViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def toggle_favorite(self, request, pk=None):
         try:
-            transcript = self.get_object()
-            transcript.is_favorite = not transcript.is_favorite
-            transcript.save()
-            serializer = self.get_serializer(transcript)
-            return Response(serializer.data)
+            # Toggle favorite in MongoDB
+            result = mongo_service.toggle_transcript_favorite(
+                transcript_id=pk,
+                user_id=str(request.user_id)
+            )
+            if result:
+                return Response(result)
+            return Response(
+                {'error': 'Transcript not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
             return Response(
                 {'error': f'Failed to toggle favorite status: {str(e)}'},

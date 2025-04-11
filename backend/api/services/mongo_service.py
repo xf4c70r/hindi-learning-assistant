@@ -4,6 +4,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
 from urllib.parse import quote_plus
+from bson import ObjectId
 
 # Load environment variables
 load_dotenv()
@@ -79,7 +80,8 @@ class MongoService:
                 'content': content,
                 'language': language,
                 'created_at': datetime.utcnow(),
-                'updated_at': datetime.utcnow()
+                'updated_at': datetime.utcnow(),
+                'is_favorite': False
             }
             result = collection.insert_one(data)
             print(f"Successfully saved transcript to MongoDB with ID: {result.inserted_id}")
@@ -90,9 +92,66 @@ class MongoService:
 
     def get_transcripts(self, user_id=None):
         """Get transcripts, optionally filtered by user_id"""
-        collection = self._db.transcripts
-        query = {'user_id': user_id} if user_id else {}
-        return list(collection.find(query))
+        try:
+            collection = self._db.transcripts
+            query = {'user_id': user_id} if user_id else {}
+            transcripts = list(collection.find(query))
+            
+            # Convert ObjectIds to strings
+            for transcript in transcripts:
+                transcript['id'] = str(transcript['_id'])
+            
+            return transcripts
+        except Exception as e:
+            print(f"Error getting transcripts from MongoDB: {str(e)}")
+            raise
+
+    def get_transcript_by_user_and_video(self, user_id, video_id):
+        """Get transcript by user_id and video_id"""
+        try:
+            collection = self._db.transcripts
+            transcript = collection.find_one({
+                'user_id': user_id,
+                'video_id': video_id
+            })
+            if transcript:
+                transcript['id'] = str(transcript['_id'])
+            return transcript
+        except Exception as e:
+            print(f"Error getting transcript from MongoDB: {str(e)}")
+            raise
+
+    def toggle_transcript_favorite(self, transcript_id, user_id):
+        """Toggle favorite status of a transcript"""
+        try:
+            collection = self._db.transcripts
+            transcript = collection.find_one({
+                '_id': ObjectId(transcript_id),
+                'user_id': user_id
+            })
+            
+            if not transcript:
+                return None
+                
+            # Toggle the is_favorite field
+            is_favorite = not transcript.get('is_favorite', False)
+            collection.update_one(
+                {'_id': ObjectId(transcript_id)},
+                {
+                    '$set': {
+                        'is_favorite': is_favorite,
+                        'updated_at': datetime.utcnow()
+                    }
+                }
+            )
+            
+            # Return updated transcript
+            transcript['is_favorite'] = is_favorite
+            transcript['id'] = str(transcript['_id'])
+            return transcript
+        except Exception as e:
+            print(f"Error toggling favorite in MongoDB: {str(e)}")
+            raise
 
 # Create singleton instance
 mongo_service = MongoService() 

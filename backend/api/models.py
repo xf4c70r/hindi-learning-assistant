@@ -1,52 +1,46 @@
-from django.db import models
+# We no longer need Django models as we're using MongoDB
+# This file can be empty or contain documentation about our MongoDB schema
 
-# Create your models here.
+"""
+MongoDB Schema Documentation
 
-class Transcript(models.Model):
-    user_id = models.CharField(max_length=100)  # MongoDB user ID
-    video_id = models.CharField(max_length=100)
-    title = models.CharField(max_length=255)
-    content = models.TextField()
-    language = models.CharField(max_length=10, default='hi')  # 'hi' for Hindi
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    is_favorite = models.BooleanField(default=False)
+Collections:
 
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['video_id']),
-            models.Index(fields=['user_id', 'created_at']),
-            models.Index(fields=['user_id', 'is_favorite']),
-        ]
-        unique_together = ['user_id', 'video_id']  # Prevent duplicate video_id per user
+1. transcripts
+{
+    '_id': ObjectId,
+    'user_id': str,
+    'video_id': str,
+    'title': str,
+    'content': str,
+    'language': str,
+    'created_at': datetime,
+    'updated_at': datetime,
+    'is_favorite': bool
+}
 
-    def __str__(self):
-        return f"{self.title} ({self.video_id})"
+2. qa_pairs
+{
+    '_id': ObjectId,
+    'transcript_id': str,
+    'video_id': str,
+    'video_title': str,
+    'question_text': str,
+    'answer': str,
+    'type': str,
+    'options': list[str],
+    'created_at': datetime,
+    'attempts': int,
+    'correct_attempts': int
+}
 
-class Question(models.Model):
-    QUESTION_TYPES = [
-        ('novice', 'Novice'),
-        ('mcq', 'Multiple Choice'),
-        ('fill_blanks', 'Fill in the Blanks'),
-    ]
-
-    transcript = models.ForeignKey(Transcript, on_delete=models.CASCADE, related_name='questions')
-    question_type = models.CharField(max_length=20, choices=QUESTION_TYPES)
-    question_text = models.TextField()
-    answer = models.TextField()
-    options = models.JSONField(null=True, blank=True)  # For MCQ questions
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_favorite = models.BooleanField(default=False)
-    attempts = models.IntegerField(default=0)  # Track total attempts
-    correct_attempts = models.IntegerField(default=0)  # Track correct attempts
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['transcript', 'question_type']),
-            models.Index(fields=['transcript', 'is_favorite']),
-        ]
-
-    def __str__(self):
-        return f"{self.question_type} question for {self.transcript.title}"
+3. user_progress
+{
+    '_id': ObjectId,
+    'user_id': str,
+    'video_id': str,
+    'type': str,
+    'answers': dict,
+    'updated_at': datetime
+}
+"""
