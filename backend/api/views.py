@@ -14,7 +14,6 @@ from bson import ObjectId
 from datetime import datetime
 from django.http import Http404
 
-from .models import Transcript, Question
 from .serializers import TranscriptSerializer, QuestionSerializer
 from .youtube_utils import get_transcript, format_transcript, extract_video_id
 from api.services.qa_service import qa_service
@@ -251,109 +250,83 @@ class QuestionViewSet(viewsets.ModelViewSet):
         questions = list(mongo_service.db.qa_pairs.find({
             'transcript_id': transcript_id
         }))
-        # Convert ObjectIds to strings
         for question in questions:
             question['_id'] = str(question['_id'])
         return questions
 
     def get_object(self):
-        """
-        Override get_object to handle both MongoDB and Django model questions
-        """
         question_id = self.kwargs.get('pk')
         transcript_id = self.kwargs.get('transcript_pk')
         
-        # Get from MongoDB
-        mongo_question = mongo_service.db.qa_pairs.find_one({
+        # Get question from MongoDB
+        question = mongo_service.db.qa_pairs.find_one({
             '_id': ObjectId(question_id),
             'transcript_id': transcript_id
         })
         
-        if mongo_question:
-            # Convert ObjectId to string
-            mongo_question['_id'] = str(mongo_question['_id'])
-            return mongo_question
-            
-        # If not found in MongoDB, try Django model
-        try:
-            return Question.objects.get(
-                id=question_id,
-                transcript_id=transcript_id,
-                transcript__user_id=str(self.request.user_id)
-            )
-        except Question.DoesNotExist:
+        if not question:
             raise Http404("Question not found")
+            
+        question['_id'] = str(question['_id'])
+        return question
 
     @action(detail=False, methods=['post'])
     def generate(self, request, transcript_pk=None):
         try:
-            # Log request data
             print(f"Generating questions for transcript {transcript_pk}")
-            print(f"Request data: {request.data}")
             
             # Validate transcript exists and belongs to user
-            transcript = Transcript.objects.get(
-                id=transcript_pk,
-                user_id=str(self.request.user_id)
-            )
+            transcript = mongo_service.get_transcript(transcript_pk)
+            if not transcript:
+                return Response(
+                    {'error': 'Transcript not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
             
             # Get and validate question type
             question_type = request.data.get('question_type', 'novice')
             if not qa_service.validate_question_type(question_type):
                 return Response(
-                    {'error': f'Invalid question type. Supported types: {qa_service.get_supported_question_types()}'}, 
+                    {'error': f'Invalid question type. Supported types: {qa_service.get_supported_question_types()}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-            print(f"Generating {question_type} questions for transcript content: {transcript.content[:100]}...")
+            
+            print(f"Generating {question_type} questions for transcript content: {transcript['content'][:100]}...")
             
             # Generate questions using QA service
             response = qa_service.generate_questions(
-                text=transcript.content,
+                text=transcript['content'],
                 question_type=question_type
             )
             
-            # Handle both list and dict responses
             questions = response.get('qa_pairs', []) if isinstance(response, dict) else response
             print(f"Generated {len(questions)} questions")
-
-            # Create Question objects
+            
+            # Create questions in MongoDB
             created_questions = []
             for q in questions:
-                try:
-                    question = Question.objects.create(
-                        transcript=transcript,
-                        question_type=question_type,
-                        question_text=q.get('question', ''),
-                        answer=q.get('answer', ''),
-                        options=q.get('options', [])
-                    )
-                    created_questions.append(question)
-                except Exception as e:
-                    print(f"Error creating question: {str(e)}")
-                    print(f"Question data: {q}")
-                    continue
-
-            if not created_questions:
-                return Response(
-                    {'error': 'Failed to generate any valid questions'}, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            serializer = self.get_serializer(created_questions, many=True)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        except Transcript.DoesNotExist:
-            return Response(
-                {'error': 'Transcript not found or access denied'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+                question_data = {
+                    'transcript_id': transcript_pk,
+                    'video_id': transcript['video_id'],
+                    'video_title': transcript.get('title', ''),
+                    'question_text': q['question'],
+                    'answer': q['answer'],
+                    'type': question_type,
+                    'options': q.get('options', []),
+                    'created_at': datetime.utcnow(),
+                    'attempts': 0,
+                    'correct_attempts': 0
+                }
+                result = mongo_service.db.qa_pairs.insert_one(question_data)
+                question_data['_id'] = str(result.inserted_id)
+                created_questions.append(question_data)
+            
+            return Response(created_questions, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
-            import traceback
             print(f"Error generating questions: {str(e)}")
-            print(traceback.format_exc())
             return Response(
-                {'error': f'Failed to generate questions: {str(e)}'},
+                {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -437,65 +410,29 @@ class QuestionViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_practice_sets(request):
-    """Get available practice sets grouped by video and type"""
     try:
-        # Aggregate practice sets from MongoDB
-        practice_sets = list(mongo_service.db.qa_pairs.aggregate([
-            {
-                '$group': {
-                    '_id': {
-                        'video_id': '$video_id',
-                        'type': '$type'
-                    },
-                    'questionCount': {'$sum': 1},
-                    'title': {'$first': '$video_title'},
-                    'created_at': {'$first': '$created_at'}
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'user_progress',
-                    'let': {
-                        'video_id': '$_id.video_id',
-                        'type': '$_id.type'
-                    },
-                    'pipeline': [
-                        {
-                            '$match': {
-                                '$expr': {
-                                    '$and': [
-                                        {'$eq': ['$user_id', str(request.user_id)]},
-                                        {'$eq': ['$video_id', '$$video_id']},
-                                        {'$eq': ['$type', '$$type']}
-                                    ]
-                                }
-                            }
-                        }
-                    ],
-                    'as': 'progress'
-                }
-            },
-            {
-                '$project': {
-                    'video_id': '$_id.video_id',
-                    'type': '$_id.type',
-                    'questionCount': 1,
-                    'title': 1,
-                    'created_at': 1,
-                    'progress': {
-                        '$cond': {
-                            'if': {'$gt': [{'$size': '$progress'}, 0]},
-                            'then': {'$arrayElemAt': ['$progress.progress', 0]},
-                            'else': 0
-                        }
-                    }
-                }
-            },
-            {'$sort': {'created_at': -1}}
-        ]))
+        # Get all transcripts for the user from MongoDB
+        transcripts = list(mongo_service.db.transcripts.find({
+            'user_id': str(request.user_id)
+        }))
+        
+        practice_sets = []
+        for transcript in transcripts:
+            transcript['_id'] = str(transcript['_id'])
+            # Get questions for this transcript
+            questions = list(mongo_service.db.qa_pairs.find({
+                'transcript_id': str(transcript['_id'])
+            }))
+            
+            if questions:
+                practice_sets.append({
+                    'id': transcript['_id'],
+                    'title': transcript.get('title', 'Untitled'),
+                    'video_id': transcript['video_id'],
+                    'question_count': len(questions)
+                })
         
         return Response(practice_sets)
-        
     except Exception as e:
         return Response(
             {'error': str(e)},
@@ -505,36 +442,29 @@ def get_practice_sets(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_practice_questions(request, video_id, question_type):
-    """Get questions for a specific practice set"""
     try:
-        questions = list(mongo_service.db.qa_pairs.find({
+        # Get transcript from MongoDB
+        transcript = mongo_service.db.transcripts.find_one({
             'video_id': video_id,
+            'user_id': str(request.user_id)
+        })
+        
+        if not transcript:
+            return Response(
+                {'error': 'Transcript not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get questions from MongoDB
+        questions = list(mongo_service.db.qa_pairs.find({
+            'transcript_id': str(transcript['_id']),
             'type': question_type
         }))
         
-        # Get user's progress for these questions
-        progress = mongo_service.db.user_progress.find_one({
-            'user_id': str(request.user_id),
-            'video_id': video_id,
-            'type': question_type
-        })
-        
-        # Get transcript content
-        transcript = Transcript.objects.filter(video_id=video_id, user_id=str(request.user_id)).first()
-        transcript_content = transcript.content if transcript else None
-        
-        # Convert ObjectId to string for JSON serialization
         for question in questions:
             question['_id'] = str(question['_id'])
-            if 'transcript_id' in question:
-                question['transcript_id'] = str(question['transcript_id'])
         
-        return Response({
-            'questions': questions,
-            'progress': progress['answers'] if progress else {},
-            'transcript': transcript_content
-        })
-        
+        return Response(questions)
     except Exception as e:
         return Response(
             {'error': str(e)},
@@ -544,70 +474,43 @@ def get_practice_questions(request, video_id, question_type):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_answer(request, question_id):
-    """Submit an answer for a practice question"""
     try:
-        answer = request.data.get('answer')
-        is_correct = request.data.get('is_correct')
-        video_id = request.data.get('video_id')
-        question_type = request.data.get('type')
+        # Get question from MongoDB
+        question = mongo_service.db.qa_pairs.find_one({
+            '_id': ObjectId(question_id)
+        })
         
-        if not all([answer, video_id, question_type]):
+        if not question:
             return Response(
-                {'error': 'Missing required fields'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Question not found'},
+                status=status.HTTP_404_NOT_FOUND
             )
         
-        # Update or create user progress
-        result = mongo_service.db.user_progress.update_one(
+        user_answer = request.data.get('answer', '').strip()
+        correct_answer = question['answer'].strip()
+        is_correct = user_answer.lower() == correct_answer.lower()
+        
+        # Update question stats in MongoDB
+        mongo_service.db.qa_pairs.update_one(
+            {'_id': ObjectId(question_id)},
             {
-                'user_id': str(request.user_id),
-                'video_id': video_id,
-                'type': question_type
-            },
-            {
-                '$set': {
-                    f'answers.{question_id}': {
-                        'answer': answer,
-                        'is_correct': is_correct,
-                        'submitted_at': datetime.utcnow()
-                    }
-                },
                 '$inc': {
-                    'total_attempts': 1,
+                    'attempts': 1,
                     'correct_attempts': 1 if is_correct else 0
-                },
-                '$setOnInsert': {
-                    'started_at': datetime.utcnow()
                 }
-            },
-            upsert=True
+            }
         )
         
-        # Calculate and update progress percentage
-        progress_doc = mongo_service.db.user_progress.find_one({
-            'user_id': str(request.user_id),
-            'video_id': video_id,
-            'type': question_type
+        updated_question = mongo_service.db.qa_pairs.find_one({
+            '_id': ObjectId(question_id)
         })
-        
-        total_questions = mongo_service.db.qa_pairs.count_documents({
-            'video_id': video_id,
-            'type': question_type
-        })
-        
-        answered_questions = len(progress_doc.get('answers', {}))
-        progress_percentage = (answered_questions / total_questions) * 100 if total_questions > 0 else 0
-        
-        mongo_service.db.user_progress.update_one(
-            {'_id': progress_doc['_id']},
-            {'$set': {'progress': progress_percentage}}
-        )
         
         return Response({
-            'success': True,
-            'progress': progress_percentage
+            'is_correct': is_correct,
+            'correct_answer': correct_answer,
+            'attempts': updated_question['attempts'],
+            'correct_attempts': updated_question['correct_attempts']
         })
-        
     except Exception as e:
         return Response(
             {'error': str(e)},
@@ -617,23 +520,21 @@ def submit_answer(request, question_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_transcript_by_video(request, video_id):
-    """Get transcript content for a specific video ID"""
     try:
-        # Get transcript content
-        transcript = Transcript.objects.filter(video_id=video_id, user_id=str(request.user_id)).first()
+        # Get transcript from MongoDB
+        transcript = mongo_service.db.transcripts.find_one({
+            'video_id': video_id,
+            'user_id': str(request.user_id)
+        })
         
         if not transcript:
             return Response(
-                {'error': 'Transcript not found for this video'},
+                {'error': 'Transcript not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        return Response({
-            'content': transcript.content,
-            'title': transcript.title,
-            'video_id': transcript.video_id
-        })
-        
+        transcript['_id'] = str(transcript['_id'])
+        return Response(transcript)
     except Exception as e:
         return Response(
             {'error': str(e)},
@@ -642,50 +543,73 @@ def get_transcript_by_video(request, video_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def generate_questions(request, transcript_id):
-    try:
-        transcript = Transcript.objects.get(id=transcript_id, user_id=str(request.user_id))
-        # ... rest of the function remains the same ...
-    except Transcript.DoesNotExist:
-        return Response({'error': 'Transcript not found'}, status=status.HTTP_404_NOT_FOUND)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
 def toggle_favorite_transcript(request, transcript_id):
     try:
-        transcript = Transcript.objects.get(id=transcript_id, user_id=str(request.user_id))
-        transcript.is_favorite = not transcript.is_favorite
-        transcript.save()
-        return Response({'is_favorite': transcript.is_favorite})
-    except Transcript.DoesNotExist:
-        return Response({'error': 'Transcript not found'}, status=status.HTTP_404_NOT_FOUND)
+        # Toggle favorite in MongoDB
+        result = mongo_service.toggle_transcript_favorite(
+            transcript_id=transcript_id,
+            user_id=str(request.user_id)
+        )
+        
+        if not result:
+            return Response(
+                {'error': 'Transcript not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        return Response({'is_favorite': result['is_favorite']})
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_favorite_question(request, question_id):
     try:
-        question = Question.objects.get(id=question_id, transcript__user_id=str(request.user_id))
-        question.is_favorite = not question.is_favorite
-        question.save()
-        return Response({'is_favorite': question.is_favorite})
-    except Question.DoesNotExist:
-        return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
+        # Toggle favorite in MongoDB
+        result = mongo_service.toggle_question_favorite(
+            question_id=question_id,
+            user_id=str(request.user_id)
+        )
+        
+        if not result:
+            return Response(
+                {'error': 'Question not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        return Response({'is_favorite': result['is_favorite']})
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def update_question_stats(request, question_id):
     try:
-        question = Question.objects.get(id=question_id, transcript__user_id=str(request.user_id))
-        is_correct = request.data.get('is_correct', False)
+        # Update question stats in MongoDB
+        result = mongo_service.update_question_stats(
+            question_id=question_id,
+            user_id=str(request.user_id),
+            is_correct=request.data.get('is_correct', False)
+        )
         
-        question.attempts += 1
-        if is_correct:
-            question.correct_attempts += 1
-        question.save()
-        
+        if not result:
+            return Response(
+                {'error': 'Question not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
         return Response({
-            'attempts': question.attempts,
-            'correct_attempts': question.correct_attempts
+            'attempts': result['attempts'],
+            'correct_attempts': result['correct_attempts']
         })
-    except Question.DoesNotExist:
-        return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
