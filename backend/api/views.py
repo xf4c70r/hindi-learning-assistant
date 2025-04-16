@@ -167,54 +167,85 @@ class TranscriptViewSet(viewsets.ModelViewSet):
             if not video_id:
                 return Response({'error': 'Invalid YouTube URL'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if transcript already exists for this user and video in MongoDB
-            existing_transcript = mongo_service.get_transcript_by_user_and_video(
-                user_id=str(request.user_id),
-                video_id=video_id
-            )
-
-            if existing_transcript:
+            # Check MongoDB connection
+            if not mongo_service.db:
                 return Response(
-                    {
-                        'error': 'A transcript for this video already exists',
-                        'transcript': existing_transcript
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                    {'error': 'Database connection error. Please try again later.'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+
+            # Check if transcript already exists for this user and video in MongoDB
+            try:
+                existing_transcript = mongo_service.get_transcript_by_user_and_video(
+                    user_id=str(request.user_id),
+                    video_id=video_id
+                )
+
+                if existing_transcript:
+                    return Response(
+                        {
+                            'error': 'A transcript for this video already exists',
+                            'transcript': existing_transcript
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as e:
+                print(f"Error checking existing transcript: {str(e)}")
+                return Response(
+                    {'error': 'Failed to check for existing transcript'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
             # Get transcript from YouTube
-            transcript_data, language = get_transcript(video_id)
-            formatted_transcript = format_transcript(transcript_data)
+            try:
+                transcript_data, language = get_transcript(video_id)
+                formatted_transcript = format_transcript(transcript_data)
+            except ValueError as e:
+                return Response(
+                    {'error': f'YouTube transcript error: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            except Exception as e:
+                print(f"Error getting YouTube transcript: {str(e)}")
+                return Response(
+                    {'error': 'Failed to fetch YouTube transcript'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             
-            # Save transcript to MongoDB only
-            result = mongo_service.save_transcript(
-                user_id=str(request.user_id),
-                video_id=video_id,
-                content=formatted_transcript,
-                language=language
-            )
-            
-            # Return the saved transcript data
-            saved_transcript = {
-                'id': str(result.inserted_id),
-                'video_id': video_id,
-                'title': request.data.get('title', 'Untitled'),
-                'content': formatted_transcript,
-                'language': language,
-                'user_id': str(request.user_id)
-            }
-            
-            return Response(saved_transcript, status=status.HTTP_201_CREATED)
-            
-        except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            # Save transcript to MongoDB
+            try:
+                result = mongo_service.save_transcript(
+                    user_id=str(request.user_id),
+                    video_id=video_id,
+                    content=formatted_transcript,
+                    language=language
+                )
+                
+                # Return the saved transcript data
+                saved_transcript = {
+                    'id': str(result.inserted_id),
+                    'video_id': video_id,
+                    'title': request.data.get('title', 'Untitled'),
+                    'content': formatted_transcript,
+                    'language': language,
+                    'user_id': str(request.user_id)
+                }
+                
+                return Response(saved_transcript, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                print(f"Error saving transcript to MongoDB: {str(e)}")
+                return Response(
+                    {'error': 'Failed to save transcript'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
             import traceback
-            print(f"Error processing transcript: {str(e)}")
+            print(f"Unexpected error in create_from_video: {str(e)}")
             print(traceback.format_exc())
             return Response(
                 {
-                    'error': 'An error occurred while processing the transcript',
+                    'error': 'An unexpected error occurred',
                     'detail': str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

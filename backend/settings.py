@@ -99,8 +99,16 @@ DATABASES = {
 }
 
 # MongoDB settings
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
-MONGODB_NAME = os.getenv('MONGODB_NAME', 'hindi_learning')
+MONGODB_URI = os.environ.get('MONGODB_URI')
+MONGODB_NAME = os.environ.get('MONGODB_NAME', 'hindi_qa_db')
+
+if not MONGODB_URI:
+    raise ValueError("MONGODB_URI environment variable is not set. Please configure it in your environment.")
+
+# Print partial URI for debugging (hiding credentials)
+uri_parts = MONGODB_URI.split('@')
+if len(uri_parts) > 1:
+    print(f"MongoDB URI format check: mongodb+srv://[hidden]@{uri_parts[-1]}")
 
 # Ensure the database directory exists
 os.makedirs(os.path.dirname(BASE_DIR / 'db.sqlite3'), exist_ok=True)

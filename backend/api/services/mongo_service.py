@@ -26,21 +26,13 @@ class MongoService:
     def _connect(self):
         """Connect to MongoDB"""
         try:
-            uri = os.getenv('MONGODB_URI')
-            db_name = os.getenv('MONGODB_NAME', 'hindi_qa_db')
+            uri = os.environ.get('MONGODB_URI')
+            db_name = os.environ.get('MONGODB_NAME', 'hindi_qa_db')
             
             if not uri:
                 raise ValueError("MONGODB_URI environment variable is not set")
 
-            # Handle URL encoding of username and password if needed
-            if '<' in uri and '>' in uri:
-                # Extract and encode password
-                start = uri.find(':<') + 2
-                end = uri.find('>', start)
-                if start > 1 and end > start:
-                    password = uri[start:end]
-                    encoded_password = quote_plus(password)
-                    uri = uri.replace(f'<{password}>', encoded_password)
+            print(f"Attempting to connect to MongoDB with URI: {uri[:20]}...")
             
             # Connect with SSL certificate verification
             self._client = MongoClient(
@@ -48,7 +40,10 @@ class MongoService:
                 tlsCAFile=certifi.where()
             )
             self._db = self._client[db_name]
-            print(f"Connected to MongoDB Atlas")
+            
+            # Test the connection
+            self._client.admin.command('ping')
+            print(f"Successfully connected to MongoDB Atlas")
         except Exception as e:
             print(f"Error connecting to MongoDB: {str(e)}")
             raise
