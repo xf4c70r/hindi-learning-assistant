@@ -3,7 +3,7 @@ import certifi
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus
 from bson import ObjectId
 
 # Load environment variables
@@ -26,24 +26,21 @@ class MongoService:
     def _connect(self):
         """Connect to MongoDB"""
         try:
-            uri = os.environ.get('MONGODB_URI')
-            db_name = os.environ.get('MONGODB_NAME', 'hindi_qa_db')
+            uri = os.getenv('MONGODB_URI')
+            db_name = os.getenv('MONGODB_NAME', 'hindi_qa_db')
             
             if not uri:
                 raise ValueError("MONGODB_URI environment variable is not set")
 
-            # Parse MongoDB URI components
-            parsed = urlparse(uri)
-            if parsed.username and parsed.password:
-                # Reconstruct URI with properly encoded username and password
-                encoded_username = quote_plus(parsed.username)
-                encoded_password = quote_plus(parsed.password)
-                netloc = f"{encoded_username}:{encoded_password}@{parsed.hostname}"
-                if parsed.port:
-                    netloc = f"{netloc}:{parsed.port}"
-                uri = parsed._replace(netloc=netloc).geturl()
-
-            print(f"Attempting to connect to MongoDB...")
+            # Handle URL encoding of username and password if needed
+            if '<' in uri and '>' in uri:
+                # Extract and encode password
+                start = uri.find(':<') + 2
+                end = uri.find('>', start)
+                if start > 1 and end > start:
+                    password = uri[start:end]
+                    encoded_password = quote_plus(password)
+                    uri = uri.replace(f'<{password}>', encoded_password)
             
             # Connect with SSL certificate verification
             self._client = MongoClient(
@@ -51,10 +48,7 @@ class MongoService:
                 tlsCAFile=certifi.where()
             )
             self._db = self._client[db_name]
-            
-            # Test the connection
-            self._client.admin.command('ping')
-            print(f"Successfully connected to MongoDB Atlas")
+            print(f"Connected to MongoDB Atlas")
         except Exception as e:
             print(f"Error connecting to MongoDB: {str(e)}")
             raise
