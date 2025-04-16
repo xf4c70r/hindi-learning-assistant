@@ -14,6 +14,8 @@ from bson import ObjectId
 from datetime import datetime
 from django.http import Http404
 import logging
+from django.core.cache import cache
+from django.conf import settings
 
 from .serializers import TranscriptSerializer, QuestionSerializer
 from .youtube_utils import get_transcript, format_transcript, extract_video_id
@@ -155,7 +157,6 @@ class TranscriptViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Get transcripts from MongoDB instead of Django DB
         user_id = getattr(self.request, 'user_id', None)
         if not user_id:
             return []
@@ -208,10 +209,21 @@ class TranscriptViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Get transcript from YouTube
-            logger.info("Attempting to fetch transcript from YouTube")
-            transcript_data, language = get_transcript(video_id)
-            logger.info(f"Successfully fetched transcript in {language}")
+            # Try to get transcript from cache first
+            cache_key = f'transcript_{video_id}'
+            cached_data = cache.get(cache_key)
+            
+            if cached_data:
+                logger.info("Found transcript in cache")
+                transcript_data, language = cached_data
+            else:
+                # Get transcript from YouTube
+                logger.info("Attempting to fetch transcript from YouTube")
+                transcript_data, language = get_transcript(video_id)
+                logger.info(f"Successfully fetched transcript in {language}")
+                
+                # Cache the transcript
+                cache.set(cache_key, (transcript_data, language), settings.TRANSCRIPT_CACHE_TIMEOUT)
             
             formatted_transcript = format_transcript(transcript_data)
             logger.info(f"Formatted transcript length: {len(formatted_transcript)}")

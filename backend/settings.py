@@ -260,3 +260,14 @@ LOGGING = {
         },
     },
 }
+
+# Cache settings
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Cache timeout for transcripts (24 hours)
+TRANSCRIPT_CACHE_TIMEOUT = 60 * 60 * 24
