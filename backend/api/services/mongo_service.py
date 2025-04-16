@@ -32,6 +32,15 @@ class MongoService:
             if not uri:
                 raise ValueError("MONGODB_URI environment variable is not set")
 
+            # Parse and encode username and password if present in the URI
+            if '@' in uri:
+                prefix, rest = uri.split('://', 1)
+                credentials, host = rest.split('@', 1)
+                if ':' in credentials:
+                    username, password = credentials.split(':', 1)
+                    encoded_uri = f"{prefix}://{quote_plus(username)}:{quote_plus(password)}@{host}"
+                    uri = encoded_uri
+
             print(f"Attempting to connect to MongoDB with URI: {uri[:20]}...")
             
             # Connect with SSL certificate verification
