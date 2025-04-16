@@ -3,7 +3,7 @@ import certifi
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from datetime import datetime
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from bson import ObjectId
 
 # Load environment variables
@@ -32,16 +32,18 @@ class MongoService:
             if not uri:
                 raise ValueError("MONGODB_URI environment variable is not set")
 
-            # Parse and encode username and password if present in the URI
-            if '@' in uri:
-                prefix, rest = uri.split('://', 1)
-                credentials, host = rest.split('@', 1)
-                if ':' in credentials:
-                    username, password = credentials.split(':', 1)
-                    encoded_uri = f"{prefix}://{quote_plus(username)}:{quote_plus(password)}@{host}"
-                    uri = encoded_uri
+            # Parse MongoDB URI components
+            parsed = urlparse(uri)
+            if parsed.username and parsed.password:
+                # Reconstruct URI with properly encoded username and password
+                encoded_username = quote_plus(parsed.username)
+                encoded_password = quote_plus(parsed.password)
+                netloc = f"{encoded_username}:{encoded_password}@{parsed.hostname}"
+                if parsed.port:
+                    netloc = f"{netloc}:{parsed.port}"
+                uri = parsed._replace(netloc=netloc).geturl()
 
-            print(f"Attempting to connect to MongoDB with URI: {uri[:20]}...")
+            print(f"Attempting to connect to MongoDB...")
             
             # Connect with SSL certificate verification
             self._client = MongoClient(
