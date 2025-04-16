@@ -156,11 +156,24 @@ class TranscriptViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Get transcripts from MongoDB instead of Django DB
-        return mongo_service.get_transcripts(user_id=str(self.request.user_id))
+        user_id = getattr(self.request, 'user_id', None)
+        if not user_id:
+            return []
+        return mongo_service.get_transcripts(user_id=str(user_id))
 
     @action(detail=False, methods=['post'], url_path='create-from-video')
     def create_from_video(self, request):
         logger.info("Starting transcript creation process")
+        
+        # Check if user is authenticated and has user_id
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            logger.error("No user_id found in request")
+            return Response(
+                {'error': 'Authentication failed - no user ID found'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
         video_url = request.data.get('video_id')  
         logger.info(f"Received video URL: {video_url}")
         
@@ -179,9 +192,9 @@ class TranscriptViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Invalid YouTube URL'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Check if transcript already exists
-            logger.info(f"Checking for existing transcript for user {request.user_id} and video {video_id}")
+            logger.info(f"Checking for existing transcript for user {user_id} and video {video_id}")
             existing_transcript = mongo_service.get_transcript_by_user_and_video(
-                user_id=str(request.user_id),
+                user_id=str(user_id),
                 video_id=video_id
             )
 
@@ -206,7 +219,7 @@ class TranscriptViewSet(viewsets.ModelViewSet):
             # Save transcript to MongoDB
             logger.info("Attempting to save transcript to MongoDB")
             result = mongo_service.save_transcript(
-                user_id=str(request.user_id),
+                user_id=str(user_id),
                 video_id=video_id,
                 content=formatted_transcript,
                 language=language
@@ -220,7 +233,7 @@ class TranscriptViewSet(viewsets.ModelViewSet):
                 'title': request.data.get('title', 'Untitled'),
                 'content': formatted_transcript,
                 'language': language,
-                'user_id': str(request.user_id)
+                'user_id': str(user_id)
             }
             
             logger.info("Successfully completed transcript creation")

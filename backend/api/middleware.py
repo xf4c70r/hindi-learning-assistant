@@ -19,7 +19,8 @@ class MongoJWTAuthentication(JWTAuthentication):
             user = type('MongoUser', (), {
                 'id': user_id,
                 'is_authenticated': True,
-                'is_active': True
+                'is_active': True,
+                'user_id': user_id  # Add user_id as a property of the user object
             })()
             
             return user
@@ -33,7 +34,24 @@ class MongoUserMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Add user_id to request if authenticated
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            request.user_id = request.user.id
-        return self.get_response(request) 
+        # Initialize user_id as None
+        request.user_id = None
+        
+        # Try to get the JWT token from the Authorization header
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            try:
+                # Extract and validate the token
+                jwt_auth = MongoJWTAuthentication()
+                token = auth_header.split(' ')[1]
+                validated_token = jwt_auth.get_validated_token(token)
+                
+                # Set user_id from the token
+                request.user_id = validated_token.get('user_id')
+            except Exception as e:
+                # Log the error but continue processing the request
+                print(f"Error processing JWT token: {str(e)}")
+                pass
+        
+        response = self.get_response(request)
+        return response 
