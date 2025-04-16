@@ -36,7 +36,11 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',  # Required for JWT auth
     'django.contrib.contenttypes',
+    'django.contrib.sessions',  # Required for JWT auth
+    'django.contrib.messages',
     'django.contrib.staticfiles',
     
     # Third party apps
@@ -57,6 +61,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',  # Required for JWT auth
+    'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'api.middleware.MongoUserMiddleware',
 ]
@@ -83,17 +89,31 @@ WSGI_APPLICATION = 'wsgi.application'
 
 
 # Database
-# We're using MongoDB exclusively, so we use a dummy database for Django's internal operations
+# We're using MongoDB for data storage but need Django's auth tables
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.dummy',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
 
 # Password validation
-# We're using MongoDB for user management, so these validators are not needed
-AUTH_PASSWORD_VALIDATORS = []
+# Keep these for JWT auth
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
 
 
 # Internationalization
