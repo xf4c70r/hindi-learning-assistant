@@ -13,12 +13,15 @@ from api.services.user_service import user_service
 from bson import ObjectId
 from datetime import datetime
 from django.http import Http404
+import logging
 
 from .serializers import TranscriptSerializer, QuestionSerializer
 from .youtube_utils import get_transcript, format_transcript, extract_video_id
 from api.services.qa_service import qa_service
 
 # Create your views here.
+
+logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -157,23 +160,33 @@ class TranscriptViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='create-from-video')
     def create_from_video(self, request):
-        video_url = request.data.get('video_id')  # We're actually receiving the full URL here
+        logger.info("Starting transcript creation process")
+        video_url = request.data.get('video_id')  
+        logger.info(f"Received video URL: {video_url}")
+        
         if not video_url:
+            logger.error("No video URL provided")
             return Response({'error': 'Video URL is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             # Extract video ID from URL
+            logger.info("Attempting to extract video ID")
             video_id = extract_video_id(video_url)
+            logger.info(f"Extracted video ID: {video_id}")
+            
             if not video_id:
+                logger.error("Failed to extract valid video ID from URL")
                 return Response({'error': 'Invalid YouTube URL'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if transcript already exists for this user and video in MongoDB
+            # Check if transcript already exists
+            logger.info(f"Checking for existing transcript for user {request.user_id} and video {video_id}")
             existing_transcript = mongo_service.get_transcript_by_user_and_video(
                 user_id=str(request.user_id),
                 video_id=video_id
             )
 
             if existing_transcript:
+                logger.info("Found existing transcript")
                 return Response(
                     {
                         'error': 'A transcript for this video already exists',
@@ -183,16 +196,22 @@ class TranscriptViewSet(viewsets.ModelViewSet):
                 )
 
             # Get transcript from YouTube
+            logger.info("Attempting to fetch transcript from YouTube")
             transcript_data, language = get_transcript(video_id)
-            formatted_transcript = format_transcript(transcript_data)
+            logger.info(f"Successfully fetched transcript in {language}")
             
-            # Save transcript to MongoDB only
+            formatted_transcript = format_transcript(transcript_data)
+            logger.info(f"Formatted transcript length: {len(formatted_transcript)}")
+            
+            # Save transcript to MongoDB
+            logger.info("Attempting to save transcript to MongoDB")
             result = mongo_service.save_transcript(
                 user_id=str(request.user_id),
                 video_id=video_id,
                 content=formatted_transcript,
                 language=language
             )
+            logger.info("Successfully saved transcript to MongoDB")
             
             # Return the saved transcript data
             saved_transcript = {
@@ -204,14 +223,16 @@ class TranscriptViewSet(viewsets.ModelViewSet):
                 'user_id': str(request.user_id)
             }
             
+            logger.info("Successfully completed transcript creation")
             return Response(saved_transcript, status=status.HTTP_201_CREATED)
             
         except ValueError as e:
+            logger.error(f"ValueError in transcript creation: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            logger.error(f"Unexpected error in transcript creation: {str(e)}")
             import traceback
-            print(f"Error processing transcript: {str(e)}")
-            print(traceback.format_exc())
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return Response(
                 {
                     'error': 'An error occurred while processing the transcript',
