@@ -1,5 +1,7 @@
 # Hindi Question-Answer Generation System
 
+<img width="943" alt="HomePage" src="https://github.com/user-attachments/assets/45117ab8-9a9f-40a5-af12-ee14f1c2a119" />
+
 A web application that automatically generates Hindi questions and answers from YouTube videos. The system processes Hindi YouTube videos, extracts transcripts, and uses AI to generate meaningful questions and answers, creating an interactive learning resource.
 
 ## Features
