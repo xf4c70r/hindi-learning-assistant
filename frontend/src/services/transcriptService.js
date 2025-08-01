@@ -61,8 +61,8 @@ const transcriptService = {
 
     generateQuestions: async (id, type = 'novice') => {
         try {
-            const response = await api.get(`/transcripts/${id}/generate_questions/`, {
-                params: { type }
+            const response = await api.post(`/transcripts/${id}/questions/generate/`, {
+                question_type: type
             });
             return response.data;
         } catch (error) {
@@ -76,6 +76,24 @@ const transcriptService = {
             return response.data;
         } catch (error) {
             throw error.response?.data || { message: 'Failed to toggle favorite status' };
+        }
+    },
+
+    translateTranscript: async (id) => {
+        try {
+            const response = await api.post(`/transcripts/${id}/translate/`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || { message: 'Failed to translate transcript' };
+        }
+    },
+
+    generateGlossary: async (id) => {
+        try {
+            const response = await api.post(`/transcripts/${id}/glossary/`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || { message: 'Failed to generate glossary' };
         }
     }
 };

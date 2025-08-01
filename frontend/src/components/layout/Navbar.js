@@ -69,6 +69,9 @@ const Navbar = () => {
 
         {user && !isHomePage && (
           <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+            <NavButton component={RouterLink} to="/curated-videos">
+              Videos
+            </NavButton>
             <NavButton component={RouterLink} to="/transcripts">
               Transcripts
             </NavButton>
@@ -77,6 +80,9 @@ const Navbar = () => {
             </NavButton>
             <NavButton component={RouterLink} to="/practice">
               Practice
+            </NavButton>
+            <NavButton component={RouterLink} to="/vocabulary">
+              Vocabulary
             </NavButton>
           </Box>
         )}

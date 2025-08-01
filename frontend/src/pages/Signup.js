@@ -147,7 +147,7 @@ const Signup = () => {
 
       const response = await authService.signup(userData);
       await login(response.access, response.refresh, response.user);
-      navigate('/transcripts');
+      navigate('/');
     } catch (error) {
       setApiError(error.message || 'Registration failed. Please try again.');
     } finally {

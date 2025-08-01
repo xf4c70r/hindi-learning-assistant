@@ -10,8 +10,8 @@ const PublicRoute = ({ children }) => {
   }
 
   if (user) {
-    // Redirect authenticated users to transcripts page
-    return <Navigate to="/transcripts" replace />;
+    // Redirect authenticated users to home page
+    return <Navigate to="/" replace />;
   }
 
   return children;

@@ -3,8 +3,8 @@ import api from './axiosConfig';
 const qaService = {
     generateQuestions: async (transcriptId, questionType = 'novice') => {
         try {
-            const response = await api.get(`/transcripts/${transcriptId}/generate_questions/`, {
-                params: { type: questionType }
+            const response = await api.post(`/transcripts/${transcriptId}/questions/generate/`, {
+                type: questionType
             });
             
             // Handle both response formats

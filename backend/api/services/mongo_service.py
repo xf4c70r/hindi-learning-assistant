@@ -76,7 +76,7 @@ class MongoService:
     def update_learning_session(self, session_id: str, new_state: dict):
         """Update the session's state and timestamp."""
         collection = self._db.learning_sessions
-        collection.update_one(
+            collection.update_one(
             {"_id": ObjectId(session_id)},
             {"$set": {"state": new_state, "updated_at": datetime.utcnow()}}
         )
@@ -92,22 +92,22 @@ class MongoService:
 
     def get_curated_videos(self, topic=None, difficulty=None, limit=None):
         """Get curated videos with optional filtering."""
-        collection = self._db.curated_videos
-        query = {}
-        
-        if topic:
-            query['topic'] = topic
-        if difficulty:
-            query['difficulty'] = difficulty
-        
+            collection = self._db.curated_videos
+            query = {}
+            
+            if topic:
+                query['topic'] = topic
+            if difficulty:
+                query['difficulty'] = difficulty
+                
         # Apply limit if specified
-        if limit:
+            if limit:
             videos = list(collection.find(query).limit(limit))
         else:
             videos = list(collection.find(query))
             
-        for video in videos:
-            video['id'] = str(video['_id'])
+            for video in videos:
+                video['id'] = str(video['_id'])
             del video['_id']
         return videos
 
@@ -122,13 +122,13 @@ class MongoService:
 
     def get_curated_video_topics(self):
         """Get unique topics from curated videos."""
-        collection = self._db.curated_videos
+            collection = self._db.curated_videos
         topics = collection.distinct("topic")
         return [{"name": topic, "count": collection.count_documents({"topic": topic})} for topic in topics]
 
     def save_curated_video(self, video_data: dict):
         """Save a curated video to the database."""
-        collection = self._db.curated_videos
+            collection = self._db.curated_videos
         
         # Add timestamps
         video_data["created_at"] = datetime.utcnow()
@@ -153,17 +153,17 @@ class MongoService:
 
     def get_learning_paths(self, user_level=None, topic=None):
         """Get learning paths with optional filtering."""
-        collection = self._db.learning_paths
-        query = {}
-        
-        if user_level:
-            query['target_level'] = user_level
-        if topic:
-            query['topic'] = topic
-        
+            collection = self._db.learning_paths
+            query = {}
+            
+            if user_level:
+                query['target_level'] = user_level
+            if topic:
+                query['topic'] = topic
+                
         paths = list(collection.find(query))
-        for path in paths:
-            path['id'] = str(path['_id'])
+            for path in paths:
+                path['id'] = str(path['_id'])
             del path['_id']
         return paths
 
