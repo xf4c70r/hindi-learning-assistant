@@ -1,67 +1,77 @@
+#!/usr/bin/env python3
+"""
+Test script to check MongoDB connection and collections
+"""
+
+import os
+import sys
+import django
+
+# Add the backend directory to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Setup Django environment
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
+django.setup()
+
 from api.services.mongo_service import mongo_service
-from datetime import datetime
 
 def test_mongo_connection():
+    """Test MongoDB connection and basic operations"""
+    print("🔍 Testing MongoDB connection...")
+    
     try:
         # Test connection
         db = mongo_service.db
-        print("Successfully connected to MongoDB")
+        print(f"✅ Connected to database: {db.name}")
         
-        # Clear existing test data
-        db.qa_pairs.delete_many({'is_test': True})
-        db.user_progress.delete_many({'is_test': True})
+        # List collections
+        collections = db.list_collection_names()
+        print(f"📚 Available collections: {collections}")
         
-        # Insert test practice set
-        test_questions = [
-            {
-                'video_id': 'test123',
-                'video_title': 'Test Hindi Video',
-                'question_text': 'What is this test about?',
-                'answer': 'This test is about Hindi QA',
-                'type': 'novice',
-                'created_at': datetime.utcnow(),
-                'attempts': 0,
-                'correct_attempts': 0,
-                'is_test': True
-            },
-            {
-                'video_id': 'test123',
-                'video_title': 'Test Hindi Video',
-                'question_text': 'Choose the correct option:',
-                'answer': 'B',
-                'type': 'mcq',
-                'options': ['A', 'B', 'C', 'D'],
-                'created_at': datetime.utcnow(),
-                'attempts': 0,
-                'correct_attempts': 0,
-                'is_test': True
-            }
-        ]
+        # Test curated videos
+        print("\n🎬 Testing curated videos...")
+        try:
+            videos = mongo_service.get_curated_videos()
+            print(f"✅ Found {len(videos)} curated videos")
+            if videos:
+                print(f"   Sample video: {videos[0].get('title', 'No title')}")
+        except Exception as e:
+            print(f"❌ Error getting curated videos: {e}")
         
-        result = db.qa_pairs.insert_many(test_questions)
-        print(f"Inserted {len(result.inserted_ids)} test questions")
+        # Test topics
+        print("\n📋 Testing video topics...")
+        try:
+            topics = mongo_service.get_curated_video_topics()
+            print(f"✅ Found {len(topics)} topics")
+            for topic in topics[:3]:  # Show first 3
+                print(f"   - {topic['name']}: {topic['count']} videos")
+        except Exception as e:
+            print(f"❌ Error getting topics: {e}")
         
-        # Verify data
-        practice_sets = list(db.qa_pairs.aggregate([
-            {
-                '$group': {
-                    '_id': {
-                        'video_id': '$video_id',
-                        'type': '$type'
-                    },
-                    'questionCount': {'$sum': 1},
-                    'title': {'$first': '$video_title'},
-                    'created_at': {'$first': '$created_at'}
-                }
-            }
-        ]))
+        # Test learning paths
+        print("\n🛤️  Testing learning paths...")
+        try:
+            paths = mongo_service.get_learning_paths()
+            print(f"✅ Found {len(paths)} learning paths")
+        except Exception as e:
+            print(f"❌ Error getting learning paths: {e}")
         
-        print("\nAvailable practice sets:")
-        for ps in practice_sets:
-            print(f"Video: {ps['title']}, Type: {ps['_id']['type']}, Questions: {ps['questionCount']}")
+        # Test user progress (should be empty for new users)
+        print("\n📊 Testing user progress...")
+        try:
+            progress = mongo_service.get_user_learning_progress("test_user")
+            print(f"✅ User progress method works (found {len(progress)} records)")
+        except Exception as e:
+            print(f"❌ Error getting user progress: {e}")
+        
+        print("\n🎉 MongoDB connection test completed!")
             
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"❌ MongoDB connection failed: {e}")
+        return False
+    
+    return True
 
 if __name__ == "__main__":
     test_mongo_connection() 

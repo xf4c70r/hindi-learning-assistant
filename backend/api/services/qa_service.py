@@ -73,5 +73,19 @@ class QAService:
         """
         return ["novice", "mcq", "fill_blanks"]
 
+    def query_word_meaning(self, word: str):
+        """
+        Query word meaning using QA model
+        Args:
+            word (str): The Hindi word to query
+        Returns:
+            dict: Dictionary containing word meaning and example
+        """
+        try:
+            return self.qa_model.query_word_meaning(word)
+        except Exception as e:
+            print(f"Error in word query service: {str(e)}")
+            raise ValueError(f"Failed to query word meaning: {str(e)}")
+
 # Create a singleton instance
 qa_service = QAService() 

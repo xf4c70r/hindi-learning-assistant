@@ -15,6 +15,18 @@ def test_qa_model():
         """
         
         print("Testing QA model with sample transcript...")
+        
+        # Test transcript processing
+        print("\nTesting transcript processing...")
+        processed_data = qa_model.process_transcript(transcript_text)
+        print("\nProcessed Transcript Data:")
+        print(json.dumps(processed_data, indent=2, ensure_ascii=False))
+        
+        # Verify processed data structure
+        assert 'punctuated_text' in processed_data, "Missing punctuated_text in response"
+        assert isinstance(processed_data['punctuated_text'], str), "Punctuated text should be a string"
+        assert len(processed_data['punctuated_text'].strip()) > 0, "Punctuated text should not be empty"
+        
         print("\nGenerating novice questions...")
         questions = qa_model.generate_questions(transcript_text, "novice")
         print("\nGenerated Questions:")

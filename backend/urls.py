@@ -20,6 +20,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.http import HttpResponse
+from api import views
+from rest_framework.routers import DefaultRouter
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -35,16 +37,30 @@ def api_root(request):
             },
             'transcripts': '/api/transcripts/',
             'favorites': '/api/favorites/',
-            'qa': '/api/qa/generate/'
+            'qa': '/api/qa/generate/',
+            "vocabulary": {
+            "query": "/api/vocabulary/query/",
+                "words": "/api/vocabulary/words/",
+                "trending": "/api/trending-words/"
+        }
         }
     })
 
 def healthz(request):
     return HttpResponse("OK", status=200)
 
+router = DefaultRouter()
+router.register(r'transcripts', views.TranscriptViewSet, basename='transcript')
+router.register(r'questions', views.QuestionViewSet, basename='question')
+
 urlpatterns = [
     path('', api_root, name='api-root'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('healthz/', healthz, name='healthz'),
+    path('api/vocabulary/words/', views.get_user_words, name='user-words'),
+    path('api/vocabulary/query/', views.query_word, name='query-word'),
+    path('api/words/<str:word_id>/toggle_favorite/', views.toggle_word_favorite, name='toggle-word-favorite'),
+    path('api/words/<str:word_id>/update_notes/', views.update_word_notes, name='update-word-notes'),
+    path('api/trending-words/', views.get_trending_words, name='trending-words'),
 ]

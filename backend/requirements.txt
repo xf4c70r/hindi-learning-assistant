@@ -9,9 +9,12 @@ pymongo==4.6.2
 youtube-transcript-api==0.6.2
 transformers==4.38.2
 torch==2.2.1
-numpy==1.26.4
+numpy>=1.22.4
 pandas==2.2.1
 yt-dlp==2024.3.10
 drf-nested-routers==0.93.5
 certifi==2024.2.2
 whitenoise==6.6.0 
+requests>=2.32.2
+scipy>=1.7.0
+jinja2>=3.0.3 

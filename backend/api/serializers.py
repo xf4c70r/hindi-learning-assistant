@@ -13,11 +13,13 @@ class TranscriptSerializer(serializers.Serializer):
     user_id = serializers.CharField(read_only=True)
     video_id = serializers.CharField()
     title = serializers.CharField(required=False)
-    content = serializers.CharField()
+    content = serializers.CharField()  # This will now be the punctuated text
     language = serializers.CharField()
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
     is_favorite = serializers.BooleanField(default=False)
+    translation = serializers.CharField(required=False)  # New field for English translation
+    glossary = serializers.JSONField(required=False)  # New field for glossary entries
     questions = serializers.SerializerMethodField()
 
     def get_questions(self, obj):
